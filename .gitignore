@@ -1,0 +1,45 @@
+# REIA Utilities Bundle
+
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+wp-config.php
+.htaccess
+/vendor/
+composer.lock
+package-lock.json
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Plugin specific
+/exports/
+/backups/
+/logs/
+
+# WordPress
+wp-content/uploads/
+wp-content/cache/
+wp-content/backup-*
+wp-content/updraft/
+wp-content/backwpup-*
