@@ -2,9 +2,9 @@
 /**
  * Plugin Name: REIA Utilities Bundle
  * Plugin URI: https://realestate-huntsville.com
- * Description: Complete suite of WordPress maintenance and optimization utilities for Real Estate Intelligence Agency.
- * Version: 1.0.0
- * Author: Real Estate Intelligence Agency
+ * Description: Complete suite of WordPress maintenance and optimization utilities. Open source, battle-tested, AI-enhanced.
+ * Version: 1.2.0
+ * Author: David E. England, Ph.D. & Claude Sonnet (Anthropic)
  * License: GPL v2 or later
  * Text Domain: reia-utilities
  */
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('REIA_UTILITIES_VERSION', '1.0.0');
+define('REIA_UTILITIES_VERSION', '1.2.0');
 define('REIA_UTILITIES_DIR', plugin_dir_path(__FILE__));
 define('REIA_UTILITIES_URL', plugin_dir_url(__FILE__));
 
