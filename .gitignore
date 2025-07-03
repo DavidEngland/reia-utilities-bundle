@@ -37,6 +37,11 @@ Thumbs.db
 /backups/
 /logs/
 
+# Debug and temporary files
+debug-*.php
+temp-*.php
+test-*.php
+
 # WordPress
 wp-content/uploads/
 wp-content/cache/
