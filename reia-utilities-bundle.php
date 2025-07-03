@@ -3,10 +3,40 @@
  * Plugin Name: REIA Utilities Bundle
  * Plugin URI: https://realestate-huntsville.com
  * Description: Complete suite of WordPress maintenance and optimization utilities. Open source, battle-tested, AI-enhanced.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: David E. England, Ph.D. & Claude Sonnet (Anthropic)
  * License: GPL v2 or later
  * Text Domain: reia-utilities
+ */
+
+/*
+ * TODO - Development Roadmap:
+ *
+ * HIGH PRIORITY (Beta Testing Phase):
+ * - [ ] Real-world validation across different hosting environments
+ * - [ ] Backup functionality testing and reliability verification
+ * - [ ] Cross-hosting compatibility testing
+ * - [ ] Performance benchmarking with real-world data
+ * - [ ] Enhanced error handling for edge cases
+ *
+ * MEDIUM PRIORITY (Post-Beta):
+ * - [ ] Code modularization - split utilities into separate loadable modules
+ * - [ ] Dry-run capabilities for destructive operations (preview mode)
+ * - [ ] Optimize long previews/summaries for better UX
+ * - [ ] Add comprehensive logging system
+ * - [ ] Implement advanced scheduling with cron jobs
+ *
+ * LOW PRIORITY (Future):
+ * - [ ] Multi-site network support
+ * - [ ] REST API endpoints for external integrations
+ * - [ ] Mobile-responsive design improvements
+ * - [ ] Internationalization (i18n) support
+ *
+ * COMPLETED:
+ * - [x] WordPress roles/capabilities (using built-in system with manage_options)
+ * - [x] All 8 core utilities implemented
+ * - [x] AJAX-based UI with real-time progress
+ * - [x] Local/staging testing completed
  */
 
 // Prevent direct access
@@ -20,7 +50,7 @@ define('REIA_UTILITIES_DIR', plugin_dir_path(__FILE__));
 define('REIA_UTILITIES_URL', plugin_dir_url(__FILE__));
 
 class REIA_Utilities_Bundle {
-    
+
     public function __construct() {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_scripts'));
@@ -36,7 +66,33 @@ class REIA_Utilities_Bundle {
         add_action('wp_ajax_reia_backup_manager', array($this, 'handle_backup_manager'));
         add_action('wp_ajax_reia_get_autoload_stats', array($this, 'handle_get_autoload_stats'));
     }
-    
+
+    /**
+     * Helper method to log actions to Simple History if available
+     * @param string $level Log level (info, warning, error)
+     * @param string $message Log message
+     * @param array $context Additional context data
+     */
+    private function log_to_simple_history($level = 'info', $message = '', $context = array()) {
+        // Check if Simple History plugin is active and SimpleLogger function exists
+        if (function_exists('SimpleLogger')) {
+            $full_message = '[REIA Utilities] ' . $message;
+            
+            switch($level) {
+                case 'warning':
+                    SimpleLogger()->warning($full_message, $context);
+                    break;
+                case 'error':
+                    SimpleLogger()->error($full_message, $context);
+                    break;
+                case 'info':
+                default:
+                    SimpleLogger()->info($full_message, $context);
+                    break;
+            }
+        }
+    }
+
     public function add_admin_menu() {
         add_management_page(
             'REIA Utilities',
@@ -51,7 +107,7 @@ class REIA_Utilities_Bundle {
         if ($hook !== 'tools_page_reia-utilities') {
             return;
         }
-        
+
         wp_enqueue_script(
             'reia-utilities-js',
             REIA_UTILITIES_URL . 'assets/js/utilities.js',
@@ -59,12 +115,12 @@ class REIA_Utilities_Bundle {
             REIA_UTILITIES_VERSION,
             true
         );
-        
+
         wp_localize_script('reia-utilities-js', 'reia_utils', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('reia_utilities_nonce')
         ));
-        
+
         wp_enqueue_style(
             'reia-utilities-css',
             REIA_UTILITIES_URL . 'assets/css/utilities.css',
@@ -238,16 +294,32 @@ class REIA_Utilities_Bundle {
                         <p>Create and manage site backups</p>
                     </div>
                     <div class="card-content">
-                        <div class="utility-options">
-                            <label><input type="checkbox" name="backup_create[]" value="database" checked> Database backup</label>
-                            <label><input type="checkbox" name="backup_create[]" value="files" checked> Files backup</label>
-                            <label><input type="checkbox" name="backup_create[]" value="uploads" checked> Media uploads</label>
-                            <label><input type="checkbox" name="backup_create[]" value="plugins" checked> Plugins backup</label>
-                            <label><input type="checkbox" name="backup_create[]" value="themes" checked> Themes backup</label>
-                            <label><input type="checkbox" name="backup_create[]" value="compress" checked> Compress backup</label>
+                        <div class="backup-type-selector">
+                            <h4>📦 Backup Type</h4>
+                            <label><input type="radio" name="backup_type" value="content" checked> Content Only (Recommended)</label>
+                            <small>Database + wp-content (excludes WP core files)</small>
+                            
+                            <label><input type="radio" name="backup_type" value="database"> Database Only</label>
+                            <small>MySQL database export only</small>
+                            
+                            <label><input type="radio" name="backup_type" value="uploads"> Media Only</label>
+                            <small>wp-content/uploads directory</small>
+                            
+                            <label><input type="radio" name="backup_type" value="full"> Full Site</label>
+                            <small>⚠️ Everything including WP core (very large!)</small>
                         </div>
-                        <button class="utility-btn primary" data-utility="backup_manager" data-action="create">Create Backup</button>
-                        <button class="utility-btn secondary" data-utility="backup_manager" data-action="list">List Backups</button>
+                        
+                        <div class="backup-options">
+                            <h4>⚙️ Options</h4>
+                            <label><input type="checkbox" name="backup_options[]" value="exclude_logs" checked> Exclude log files</label>
+                            <label><input type="checkbox" name="backup_options[]" value="exclude_cache" checked> Exclude cache files</label>
+                            <label><input type="checkbox" name="backup_options[]" value="compress_images"> Compress images (slower)</label>
+                        </div>
+                        
+                        <div class="backup-actions">
+                            <button class="utility-btn primary" data-utility="backup_manager" data-action="create">📦 Create Backup</button>
+                            <button class="utility-btn secondary" data-utility="backup_manager" data-action="list">📋 Manage Backups</button>
+                        </div>
                     </div>
                     <div class="utility-results" style="display: none;"></div>
                 </div>
@@ -278,15 +350,15 @@ class REIA_Utilities_Bundle {
         if (!current_user_can('manage_options')) {
             wp_send_json_error('Insufficient permissions');
         }
-        
+
         check_ajax_referer('reia_utilities_nonce', 'nonce');
-        
+
         $optimize_options = isset($_POST['db_optimize_options']) ? $_POST['db_optimize_options'] : array();
         $dry_run = isset($_POST['dry_run']) && $_POST['dry_run'] === 'true';
         $results = array();
-        
+
         global $wpdb;
-        
+
         if ($dry_run) {
             // Dry run mode - show what would be affected without making changes
             $results['dry_run'] = true;
@@ -299,7 +371,7 @@ class REIA_Utilities_Bundle {
                     WHERE autoload = 'yes' AND LENGTH(option_value) > 5000
                     ORDER BY size_bytes DESC
                 ");
-                
+
                 $critical_options = array('wp_user_roles', 'active_plugins', 'cron', 'stylesheet', 'template');
                 $will_fix = array();
                 $total_savings = 0;
@@ -314,7 +386,7 @@ class REIA_Utilities_Bundle {
                         $total_savings += $option->size_bytes;
                     }
                 }
-                
+
                 $results['preview']['autoload'] = array(
                     'will_fix_count' => count($will_fix),
                     'options' => array_slice($will_fix, 0, 10), // Show first 10
@@ -322,7 +394,7 @@ class REIA_Utilities_Bundle {
                     'description' => 'Large autoloaded options that will be changed to non-autoload'
                 );
             }
-            
+
             if (in_array('revisions', $optimize_options)) {
                 $revision_count = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'revision'");
                 $results['preview']['revisions'] = array(
@@ -330,7 +402,7 @@ class REIA_Utilities_Bundle {
                     'description' => 'Post revisions that will be permanently deleted'
                 );
             }
-            
+
             if (in_array('spam', $optimize_options)) {
                 $spam_count = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->comments} WHERE comment_approved = 'spam'");
                 $results['preview']['spam'] = array(
@@ -338,7 +410,7 @@ class REIA_Utilities_Bundle {
                     'description' => 'Spam comments that will be permanently deleted'
                 );
             }
-            
+
             if (in_array('trash', $optimize_options)) {
                 $trash_count = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_status = 'trash'");
                 $results['preview']['trash'] = array(
@@ -346,7 +418,7 @@ class REIA_Utilities_Bundle {
                     'description' => 'Trashed posts that will be permanently deleted'
                 );
             }
-            
+
             if (in_array('orphaned', $optimize_options)) {
                 $orphaned_postmeta = $wpdb->get_var("
                     SELECT COUNT(*) FROM {$wpdb->postmeta} pm
@@ -366,12 +438,12 @@ class REIA_Utilities_Bundle {
                     'description' => 'Orphaned metadata with no associated posts/users'
                 );
             }
-            
+
             if (in_array('optimize', $optimize_options)) {
                 $tables_with_overhead = $wpdb->get_results("
                     SHOW TABLE STATUS WHERE Data_free > 0
                 ");
-                
+
                 $table_info = array();
                 $total_overhead = 0;
 
@@ -390,7 +462,7 @@ class REIA_Utilities_Bundle {
                     'description' => 'Database tables that will be optimized to reclaim overhead space'
                 );
             }
-            
+
             $results['preview_message'] = 'Preview of database optimization changes:';
         } else {
             // Actual execution mode
@@ -402,7 +474,7 @@ class REIA_Utilities_Bundle {
                     WHERE autoload = 'yes' AND LENGTH(option_value) > 5000
                     ORDER BY size_bytes DESC
                 ");
-                
+
                 $fixed_count = 0;
                 $saved_bytes = 0;
 
@@ -425,7 +497,7 @@ class REIA_Utilities_Bundle {
                     'saved_mb' => round($saved_bytes / 1024 / 1024, 2)
                 );
             }
-            
+
             if (in_array('revisions', $optimize_options)) {
                 $deleted_revisions = $wpdb->query("DELETE FROM {$wpdb->posts} WHERE post_type = 'revision'");
                 $results['revisions'] = array('deleted_count' => $deleted_revisions);
@@ -447,30 +519,33 @@ class REIA_Utilities_Bundle {
                     LEFT JOIN {$wpdb->posts} p ON pm.post_id = p.ID
                     WHERE p.ID IS NULL
                 ");
-                
+
                 $orphaned_usermeta = $wpdb->query("
                     DELETE um FROM {$wpdb->usermeta} um
                     LEFT JOIN {$wpdb->users} u ON um.user_id = u.ID
                     WHERE u.ID IS NULL
                 ");
-                
+
                 $results['orphaned'] = array(
                     'postmeta_deleted' => $orphaned_postmeta,
                     'usermeta_deleted' => $orphaned_usermeta
                 );
             }
-            
+
             if (in_array('optimize', $optimize_options)) {
                 $tables = $wpdb->get_results("SHOW TABLES", ARRAY_N);
                 $optimized_tables = 0;
-                
+
                 foreach ($tables as $table) {
                     $wpdb->query("OPTIMIZE TABLE " . $table[0]);
                     $optimized_tables++;
                 }
-                
+
                 $results['optimize'] = array('optimized_tables' => $optimized_tables);
             }
+
+            // Log to Simple History if not in dry run mode
+            $this->log_database_optimization_to_history($optimize_options, $results);
         }
 
         wp_send_json_success($results);
@@ -501,7 +576,7 @@ class REIA_Utilities_Bundle {
                     WHERE option_name LIKE '_transient_%'
                     OR option_name LIKE '_site_transient_%'
                 ");
-                
+
                 $results['preview']['transients'] = array(
                     'count' => $transient_count,
                     'description' => 'Expired transients and temporary cache data'
@@ -580,6 +655,9 @@ class REIA_Utilities_Bundle {
                 flush_rewrite_rules();
                 $results['rewrite'] = array('status' => 'flushed');
             }
+
+            // Log to Simple History if not in dry run mode
+            $this->log_cache_cleaning_to_history($clean_options, $results);
         }
 
         wp_send_json_success($results);
@@ -610,7 +688,7 @@ class REIA_Utilities_Bundle {
                 FROM {$wpdb->options}
                 WHERE autoload = 'yes' AND LENGTH(option_value) > 5000
             ");
-            
+
             $fixed = 0;
             $saved_bytes = 0;
 
@@ -629,14 +707,14 @@ class REIA_Utilities_Bundle {
                     $total_saved += $option->size_bytes;
                 }
             }
-            
+
             $results['large_options'] = array(
                 'fixed_count' => $fixed,
                 'saved_bytes' => $saved_bytes,
                 'saved_mb' => round($saved_bytes / 1024 / 1024, 2)
             );
         }
-        
+
         // Calculate new autoload size
         $new_size = $wpdb->get_var("
             SELECT SUM(LENGTH(option_value))
@@ -648,20 +726,23 @@ class REIA_Utilities_Bundle {
             'old_size_mb' => round($current_size / 1024 / 1024, 2),
             'new_size_mb' => round($new_size / 1024 / 1024, 2),
             'total_saved_mb' => round(($current_size - $new_size) / 1024 / 1024, 2),
-            'performance_improvement' => round((($current_size - $new_size) / $current_size) * 100, 1)
+            'performance_improvement' => $current_size > 0 ? round((($current_size - $new_size) / $current_size) * 100, 1) : 0
         );
+
+        // Log to Simple History
+        $this->log_autoload_optimization_to_history($fix_options, $results);
 
         wp_send_json_success($results);
     }
-    
+
     // Get Autoload Stats Handler
     public function handle_get_autoload_stats() {
         if (!current_user_can('manage_options')) {
             wp_send_json_error('Insufficient permissions');
         }
-        
+
         check_ajax_referer('reia_utilities_nonce', 'nonce');
-        
+
         global $wpdb;
 
         // Get current autoload size and count
@@ -713,7 +794,7 @@ class REIA_Utilities_Bundle {
                 new RecursiveDirectoryIterator($directory, RecursiveDirectoryIterator::SKIP_DOTS),
                 RecursiveIteratorIterator::LEAVES_ONLY
             );
-            
+
             foreach ($files as $file) {
                 if ($file->isFile()) {
                     $size += $file->getSize();
@@ -721,6 +802,197 @@ class REIA_Utilities_Bundle {
             }
         }
         return $size;
+    }
+
+    /**
+     * Log database optimization actions to Simple History
+     */
+    private function log_database_optimization_to_history($optimize_options, $results) {
+        if (!function_exists('SimpleLogger')) {
+            return;
+        }
+
+        $actions_performed = array();
+        $stats = array();
+
+        if (in_array('autoload', $optimize_options) && isset($results['autoload'])) {
+            $actions_performed[] = 'Fixed autoload options';
+            $stats[] = sprintf('%d large autoload options fixed, saved %s', 
+                $results['autoload']['fixed_options'], 
+                $this->format_bytes($results['autoload']['saved_bytes'])
+            );
+        }
+
+        if (in_array('revisions', $optimize_options) && isset($results['revisions'])) {
+            $actions_performed[] = 'Cleaned post revisions';
+            $stats[] = sprintf('%d post revisions deleted', $results['revisions']['deleted_count']);
+        }
+
+        if (in_array('spam', $optimize_options) && isset($results['spam'])) {
+            $actions_performed[] = 'Removed spam comments';
+            $stats[] = sprintf('%d spam comments deleted', $results['spam']['deleted_count']);
+        }
+
+        if (in_array('trash', $optimize_options) && isset($results['trash'])) {
+            $actions_performed[] = 'Emptied trash';
+            $stats[] = sprintf('%d trashed posts deleted', $results['trash']['deleted_count']);
+        }
+
+        if (in_array('orphaned', $optimize_options) && isset($results['orphaned'])) {
+            $actions_performed[] = 'Removed orphaned data';
+            $stats[] = sprintf('%d orphaned postmeta and %d orphaned usermeta entries deleted', 
+                $results['orphaned']['postmeta_deleted'], 
+                $results['orphaned']['usermeta_deleted']
+            );
+        }
+
+        if (in_array('optimize', $optimize_options) && isset($results['optimize'])) {
+            $actions_performed[] = 'Optimized database tables';
+            $stats[] = sprintf('%d database tables optimized', $results['optimize']['optimized_tables']);
+        }
+
+        if (!empty($actions_performed)) {
+            $message = 'Database optimization completed: ' . implode(', ', $actions_performed);
+            $context = array(
+                'actions' => $actions_performed,
+                'statistics' => $stats,
+                'user_id' => get_current_user_id(),
+                'user_login' => wp_get_current_user()->user_login
+            );
+
+            $this->log_to_simple_history('info', $message, $context);
+        }
+    }
+
+    /**
+     * Log cache cleaning actions to Simple History
+     */
+    private function log_cache_cleaning_to_history($clean_options, $results) {
+        if (!function_exists('SimpleLogger')) {
+            return;
+        }
+
+        $actions_performed = array();
+        $stats = array();
+
+        if (in_array('transients', $clean_options) && isset($results['transients'])) {
+            $actions_performed[] = 'Cleared transients';
+            $stats[] = sprintf('%d transients deleted', $results['transients']['deleted_count']);
+        }
+
+        if (in_array('elementor', $clean_options) && isset($results['elementor'])) {
+            $actions_performed[] = 'Cleared Elementor cache';
+            $stats[] = 'Elementor cache and template library cleared';
+        }
+
+        if (in_array('object', $clean_options) && isset($results['object'])) {
+            $actions_performed[] = 'Flushed object cache';
+            $stats[] = 'WordPress object cache flushed';
+        }
+
+        if (in_array('opcache', $clean_options) && isset($results['opcache'])) {
+            $actions_performed[] = 'Reset OPCache';
+            $stats[] = 'PHP OPCache reset';
+        }
+
+        if (in_array('rewrite', $clean_options) && isset($results['rewrite'])) {
+            $actions_performed[] = 'Flushed rewrite rules';
+            $stats[] = 'WordPress rewrite rules flushed';
+        }
+
+        if (!empty($actions_performed)) {
+            $message = 'Cache cleaning completed: ' . implode(', ', $actions_performed);
+            $context = array(
+                'actions' => $actions_performed,
+                'statistics' => $stats,
+                'user_id' => get_current_user_id(),
+                'user_login' => wp_get_current_user()->user_login
+            );
+
+            $this->log_to_simple_history('info', $message, $context);
+        }
+    }
+
+    /**
+     * Log autoload optimization actions to Simple History
+     */
+    private function log_autoload_optimization_to_history($fix_options, $results) {
+        if (!function_exists('SimpleLogger')) {
+            return;
+        }
+
+        $actions_performed = array();
+        $stats = array();
+
+        if (in_array('large_options', $fix_options) && isset($results['large_options'])) {
+            $actions_performed[] = 'Fixed large autoload options';
+            $stats[] = sprintf('%d large autoload options fixed, saved %s', 
+                $results['large_options']['fixed_count'], 
+                $this->format_bytes($results['large_options']['saved_bytes'])
+            );
+        }
+
+        if (isset($results['summary'])) {
+            $stats[] = sprintf('Total performance improvement: %s%%, reduced autoload from %s MB to %s MB',
+                $results['summary']['performance_improvement'],
+                $results['summary']['old_size_mb'],
+                $results['summary']['new_size_mb']
+            );
+        }
+
+        if (!empty($actions_performed)) {
+            $message = 'Autoload optimization completed: ' . implode(', ', $actions_performed);
+            $context = array(
+                'actions' => $actions_performed,
+                'statistics' => $stats,
+                'user_id' => get_current_user_id(),
+                'user_login' => wp_get_current_user()->user_login
+            );
+
+            $this->log_to_simple_history('info', $message, $context);
+        }
+    }
+
+    /**
+     * Log other utility actions to Simple History (generic method for remaining utilities)
+     */
+    private function log_utility_action_to_history($utility_name, $action, $results) {
+        if (!function_exists('SimpleLogger')) {
+            return;
+        }
+
+        $stats = array();
+        
+        // Extract meaningful statistics from results
+        if (is_array($results)) {
+            foreach ($results as $key => $value) {
+                if (is_array($value)) {
+                    // Handle nested array results
+                    foreach ($value as $subkey => $subvalue) {
+                        if (is_numeric($subvalue)) {
+                            $stats[] = ucfirst($key) . ' ' . $subkey . ': ' . $subvalue;
+                        } elseif (is_string($subvalue) && strlen($subvalue) < 100) {
+                            $stats[] = ucfirst($key) . ' ' . $subkey . ': ' . $subvalue;
+                        }
+                    }
+                } elseif (is_numeric($value)) {
+                    $stats[] = ucfirst($key) . ': ' . $value;
+                } elseif (is_string($value) && strlen($value) < 100) {
+                    $stats[] = ucfirst($key) . ': ' . $value;
+                }
+            }
+        }
+
+        $message = sprintf('%s %s completed', ucfirst($utility_name), $action);
+        $context = array(
+            'utility' => $utility_name,
+            'action' => $action,
+            'statistics' => $stats,
+            'user_id' => get_current_user_id(),
+            'user_login' => wp_get_current_user()->user_login
+        );
+
+        $this->log_to_simple_history('info', $message, $context);
     }
 
     private function format_bytes($bytes, $precision = 2) {
@@ -748,24 +1020,24 @@ class REIA_Utilities_Bundle {
         foreach ($files as $file) {
             if ($file->isFile() && pathinfo($file, PATHINFO_EXTENSION) === 'php') {
                 $content = file_get_contents($file);
-                
+
                 // Check for eval() usage
                 if (preg_match('/\beval\s*\(/', $content)) {
                     $issues[] = 'Contains eval() function in ' . basename($file);
                 }
-                
+
                 // Check for file_get_contents with URLs
                 if (preg_match('/file_get_contents\s*\(\s*[\'"]https?:/', $content)) {
                     $issues[] = 'Remote file inclusion in ' . basename($file);
                 }
-                
+
                 // Check for unescaped SQL
                 if (preg_match('/\$wpdb->(query|get_|prepare)\s*\([^)]*\$[^)]*\)/', $content)) {
                     if (!preg_match('/\$wpdb->prepare/', $content)) {
                         $issues[] = 'Potential SQL injection in ' . basename($file);
                     }
                 }
-                
+
                 // Check for unescaped output
                 if (preg_match('/echo\s+\$_(GET|POST|REQUEST)/', $content)) {
                     $issues[] = 'Unescaped user input output in ' . basename($file);
@@ -896,7 +1168,7 @@ class REIA_Utilities_Bundle {
 
             if (file_exists($file_path) && is_file($file_path)) {
                 $size = filesize($file_path);
-                
+
                 // Safety check - don't delete core WordPress files
                 if ($this->is_safe_to_delete($file_path)) {
                     if (unlink($file_path)) {
@@ -1013,10 +1285,10 @@ class REIA_Utilities_Bundle {
             if (file_exists($filepath)) {
                 $current_perms = fileperms($filepath) & 0777;
                 $expected_perms = $settings['expected'];
-                
+
                 $status = ($current_perms === $expected_perms) ? 'pass' :
                          ($settings['critical'] ? 'fail' : 'warning');
-                
+
                 $checks[$file] = array(
                     'status' => $status,
                     'current' => decoct($current_perms),
@@ -1350,7 +1622,7 @@ class REIA_Utilities_Bundle {
         $analysis['debug_mode'] = array(
             'enabled' => defined('WP_DEBUG') && WP_DEBUG,
             'status' => defined('WP_DEBUG') && WP_DEBUG ? 'warning' : 'good',
-            'message' => defined('WP_DEBUG') && WP_DEBUG ? 'Debug mode enabled (impacts performance)' : 'Debug mode disabled'
+            'message' => defined('WP_DEBUG') && WP_DEBUG ? 'Debug mode enabled' : 'Debug mode disabled'
         );
 
         // Check object cache
@@ -1379,7 +1651,7 @@ class REIA_Utilities_Bundle {
         // Deduct points for issues
         foreach ($analysis as $category => $data) {
             if ($category === 'overall_score') continue;
-            
+
             if (is_array($data)) {
                 foreach ($data as $check) {
                     if (isset($check['status'])) {
@@ -1479,7 +1751,7 @@ class REIA_Utilities_Bundle {
         $backup_dir = WP_CONTENT_DIR . '/reia-backups';
         if (!file_exists($backup_dir)) {
             wp_mkdir_p($backup_dir);
-            
+
             // Create .htaccess to protect backup directory
             $htaccess_content = "Order deny,allow\nDeny from all\n";
             file_put_contents($backup_dir . '/.htaccess', $htaccess_content);
@@ -1490,7 +1762,7 @@ class REIA_Utilities_Bundle {
     private function list_backups() {
         $backup_dir = $this->get_backup_directory();
         $backups = array();
-        
+
         if (is_dir($backup_dir)) {
             $files = scandir($backup_dir);
             foreach ($files as $file) {
@@ -1506,12 +1778,12 @@ class REIA_Utilities_Bundle {
                 }
             }
         }
-        
+
         // Sort by creation date (newest first)
         usort($backups, function($a, $b) {
             return strtotime($b['created']) - strtotime($a['created']);
         });
-        
+
         return array(
             'backups' => $backups,
             'backup_dir' => $backup_dir,
@@ -1519,14 +1791,14 @@ class REIA_Utilities_Bundle {
         );
     }
 
-    private function create_backup($backup_type) {
-        set_time_limit(300); // 5 minutes
-        
+    private function create_backup($backup_type, $backup_options = array()) {
+        set_time_limit(600); // 10 minutes for large backups
+
         $backup_dir = $this->get_backup_directory();
         $timestamp = date('Y-m-d_H-i-s');
         $backup_filename = "reia-backup-{$backup_type}-{$timestamp}.zip";
         $backup_filepath = $backup_dir . '/' . $backup_filename;
-        
+
         if (!class_exists('ZipArchive')) {
             return array(
                 'success' => false,
@@ -1540,17 +1812,48 @@ class REIA_Utilities_Bundle {
         if ($result !== TRUE) {
             return array(
                 'success' => false,
-                'message' => 'Could not create backup zip file.'
+                'message' => 'Could not create backup zip file. Error code: ' . $result
             );
         }
 
         $files_added = 0;
+        $exclude_patterns = array('wp-content/reia-backups');
+        
+        // Add exclusions based on options
+        if (in_array('exclude_logs', $backup_options)) {
+            $exclude_patterns[] = '*.log';
+        }
+        if (in_array('exclude_cache', $backup_options)) {
+            $exclude_patterns[] = '*/cache/*';
+            $exclude_patterns[] = '*/w3tc-config/*';
+            $exclude_patterns[] = '*/wp-rocket-config/*';
+        }
 
         try {
             switch ($backup_type) {
+                case 'content':
+                    // Recommended: Database + wp-content (no WP core)
+                    $db_sql = $this->export_database();
+                    if ($db_sql) {
+                        $zip->addFromString('database.sql', $db_sql);
+                        $files_added++;
+                    }
+                    
+                    // Add wp-content directory
+                    if (is_dir(WP_CONTENT_DIR)) {
+                        $files_added += $this->add_directory_to_zip($zip, WP_CONTENT_DIR, 'wp-content/', $exclude_patterns);
+                    }
+                    
+                    // Add wp-config.php if it exists
+                    if (file_exists(ABSPATH . 'wp-config.php')) {
+                        $zip->addFile(ABSPATH . 'wp-config.php', 'wp-config.php');
+                        $files_added++;
+                    }
+                    break;
+
                 case 'full':
-                    // Backup entire WordPress installation
-                    $files_added += $this->add_directory_to_zip($zip, ABSPATH, '', array('wp-content/reia-backups'));
+                    // Everything including WP core (large!)
+                    $files_added += $this->add_directory_to_zip($zip, ABSPATH, '', $exclude_patterns);
                     $db_sql = $this->export_database();
                     if ($db_sql) {
                         $zip->addFromString('database.sql', $db_sql);
@@ -1558,13 +1861,8 @@ class REIA_Utilities_Bundle {
                     }
                     break;
 
-                case 'files':
-                    // Backup files only (no database)
-                    $files_added += $this->add_directory_to_zip($zip, ABSPATH, '', array('wp-content/reia-backups'));
-                    break;
-
                 case 'database':
-                    // Backup database only
+                    // Database only
                     $db_sql = $this->export_database();
                     if ($db_sql) {
                         $zip->addFromString('database.sql', $db_sql);
@@ -1573,10 +1871,10 @@ class REIA_Utilities_Bundle {
                     break;
 
                 case 'uploads':
-                    // Backup uploads directory only
+                    // Uploads directory only
                     $upload_dir = wp_upload_dir();
                     if (is_dir($upload_dir['basedir'])) {
-                        $files_added += $this->add_directory_to_zip($zip, $upload_dir['basedir'], 'wp-content/uploads/');
+                        $files_added += $this->add_directory_to_zip($zip, $upload_dir['basedir'], 'wp-content/uploads/', $exclude_patterns);
                     }
                     break;
             }
@@ -1591,13 +1889,18 @@ class REIA_Utilities_Bundle {
                 );
             }
 
+            $file_size = filesize($backup_filepath);
+            
             return array(
                 'success' => true,
                 'message' => "Backup created successfully: {$backup_filename}",
                 'filename' => $backup_filename,
-                'size' => $this->format_bytes(filesize($backup_filepath)),
+                'size' => $this->format_bytes($file_size),
                 'files_count' => $files_added,
-                'type' => $backup_type
+                'type' => $backup_type,
+                'download_url' => admin_url('admin-ajax.php') . '?action=reia_backup_manager&action_type=download&backup_file=' . urlencode($backup_filename) . '&nonce=' . wp_create_nonce('reia_utilities_nonce'),
+                'can_download' => true,
+                'created' => date('Y-m-d H:i:s')
             );
 
         } catch (Exception $e) {
@@ -1612,7 +1915,7 @@ class REIA_Utilities_Bundle {
             );
         }
     }
-    
+
     private function restore_backup($backup_file) {
         // Note: Backup restoration is a complex and potentially dangerous operation
         // This is a simplified implementation - in production, you'd want more safeguards
@@ -1634,7 +1937,7 @@ class REIA_Utilities_Bundle {
                 'message' => 'Invalid backup filename.'
             );
         }
-        
+
         if (file_exists($backup_filepath) && unlink($backup_filepath)) {
             return array(
                 'success' => true,
@@ -1647,7 +1950,7 @@ class REIA_Utilities_Bundle {
             );
         }
     }
-    
+
     private function preview_backup_deletion($backup_file) {
         $backup_dir = $this->get_backup_directory();
         $backup_filepath = $backup_dir . '/' . basename($backup_file);
@@ -1697,7 +2000,7 @@ class REIA_Utilities_Bundle {
                 if (preg_match('/^reia-backup-.+\.zip$/', $file)) {
                     $filepath = $backup_dir . '/' . $file;
                     $file_time = filemtime($filepath);
-                    
+
                     if ($file_time < $cutoff_time) {
                         $file_size = filesize($filepath);
                         $old_backups[] = array(
@@ -1726,13 +2029,13 @@ class REIA_Utilities_Bundle {
                 ) : 'No old backups found to clean up'
         );
     }
-    
+
     private function cleanup_old_backups() {
         $backup_dir = $this->get_backup_directory();
         $deleted_backups = array();
         $cutoff_time = time() - (30 * DAY_IN_SECONDS); // 30 days ago
         $total_size_freed = 0;
-        
+
         if (is_dir($backup_dir)) {
             $files = scandir($backup_dir);
             foreach ($files as $file) {
@@ -1750,7 +2053,7 @@ class REIA_Utilities_Bundle {
                 }
             }
         }
-        
+
         return array(
             'success' => true,
             'deleted_backups' => $deleted_backups,
@@ -1766,11 +2069,11 @@ class REIA_Utilities_Bundle {
     private function add_directory_to_zip($zip, $source_dir, $zip_path_prefix = '', $exclude_dirs = array()) {
         $files_added = 0;
         $source_dir = rtrim($source_dir, '/\\') . '/';
-        
+
         if (!is_dir($source_dir)) {
             return $files_added;
         }
-        
+
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($source_dir, RecursiveDirectoryIterator::SKIP_DOTS),
             RecursiveIteratorIterator::SELF_FIRST
@@ -1815,15 +2118,26 @@ class REIA_Utilities_Bundle {
 
         return $files_added;
     }
-    
+
     private function export_database() {
         global $wpdb;
-        
+
         try {
             $sql = '';
 
             // Get all tables
             $tables = $wpdb->get_results('SHOW TABLES', ARRAY_N);
+            
+            // Check for database errors
+            if ($wpdb->last_error) {
+                wp_send_json_error('Database error: ' . $wpdb->last_error);
+                return;
+            }
+            
+            if (empty($tables)) {
+                wp_send_json_error('No tables found in database');
+                return;
+            }
 
             foreach ($tables as $table) {
                 $table_name = $table[0];
@@ -1835,12 +2149,24 @@ class REIA_Utilities_Bundle {
 
                 // Get table structure
                 $create_table = $wpdb->get_row("SHOW CREATE TABLE `{$table_name}`", ARRAY_N);
+                
+                // Skip table if we can't get its structure
+                if (!$create_table || !isset($create_table[1])) {
+                    continue;
+                }
+                
                 $sql .= "\n\n-- Table structure for table `{$table_name}`\n";
                 $sql .= "DROP TABLE IF EXISTS `{$table_name}`;\n";
                 $sql .= $create_table[1] . ";\n";
 
                 // Get table data
                 $rows = $wpdb->get_results("SELECT * FROM `{$table_name}`", ARRAY_A);
+                
+                // Check for database errors on data retrieval
+                if ($wpdb->last_error) {
+                    $sql .= "\n-- Error retrieving data for table `{$table_name}`: " . $wpdb->last_error . "\n";
+                    continue;
+                }
 
                 if (!empty($rows)) {
                     $sql .= "\n-- Dumping data for table `{$table_name}`\n";
@@ -1865,7 +2191,7 @@ class REIA_Utilities_Bundle {
             return false;
         }
     }
-    
+
     private function get_backup_type_from_filename($filename) {
         if (strpos($filename, '-full-') !== false) return 'Full';
         if (strpos($filename, '-files-') !== false) return 'Files';
@@ -1873,7 +2199,134 @@ class REIA_Utilities_Bundle {
         if (strpos($filename, '-uploads-') !== false) return 'Uploads';
         return 'Unknown';
     }
+
+    /**
+     * Download a backup file
+     */
+    private function download_backup($backup_file) {
+        $backup_dir = $this->get_backup_directory();
+        $backup_filepath = $backup_dir . '/' . basename($backup_file);
+        
+        // Security check - only allow download of backup files in our backup directory
+        if (!preg_match('/^reia-backup-.+\.zip$/', basename($backup_file))) {
+            wp_die('Invalid backup filename.');
+        }
+        
+        if (!file_exists($backup_filepath)) {
+            wp_die('Backup file not found.');
+        }
+        
+        // Force download
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="' . basename($backup_file) . '"');
+        header('Content-Length: ' . filesize($backup_filepath));
+        header('Cache-Control: no-cache');
+        
+        // Output file and exit
+        readfile($backup_filepath);
+        exit;
+    }
     
+    /**
+     * Get estimated backup size before creating
+     */
+    private function get_backup_size_estimate($backup_type) {
+        $estimate = array(
+            'type' => $backup_type,
+            'estimated_size' => 0,
+            'estimated_files' => 0,
+            'warning' => '',
+            'recommendations' => array()
+        );
+        
+        switch ($backup_type) {
+            case 'content':
+                // Database size
+                $db_size = $this->get_database_size();
+                $content_size = $this->get_directory_size(WP_CONTENT_DIR);
+                $estimate['estimated_size'] = $db_size + $content_size;
+                $estimate['breakdown'] = array(
+                    'database' => $this->format_bytes($db_size),
+                    'wp_content' => $this->format_bytes($content_size)
+                );
+                $estimate['recommendations'][] = 'Recommended backup type - includes your data without WP core files';
+                break;
+                
+            case 'full':
+                $total_size = $this->get_directory_size(ABSPATH);
+                $db_size = $this->get_database_size();
+                $estimate['estimated_size'] = $total_size + $db_size;
+                $estimate['breakdown'] = array(
+                    'database' => $this->format_bytes($db_size),
+                    'all_files' => $this->format_bytes($total_size)
+                );
+                if ($total_size > 1073741824) { // 1GB
+                    $estimate['warning'] = 'This backup will be very large and may take a long time to create and download.';
+                }
+                $estimate['recommendations'][] = 'Consider "Content Only" backup instead to exclude WP core files';
+                break;
+                
+            case 'database':
+                $db_size = $this->get_database_size();
+                $estimate['estimated_size'] = $db_size;
+                $estimate['breakdown'] = array(
+                    'database' => $this->format_bytes($db_size)
+                );
+                $estimate['recommendations'][] = 'Quick backup option - only your database content';
+                break;
+                
+            case 'uploads':
+                $upload_dir = wp_upload_dir();
+                $uploads_size = is_dir($upload_dir['basedir']) ? $this->get_directory_size($upload_dir['basedir']) : 0;
+                $estimate['estimated_size'] = $uploads_size;
+                $estimate['breakdown'] = array(
+                    'uploads' => $this->format_bytes($uploads_size)
+                );
+                $estimate['recommendations'][] = 'Media files only - good for backing up images, videos, and documents';
+                break;
+        }
+        
+        $estimate['estimated_size_formatted'] = $this->format_bytes($estimate['estimated_size']);
+        $estimate['estimated_time'] = $this->estimate_backup_time($estimate['estimated_size']);
+        
+        return $estimate;
+    }
+    
+    /**
+     * Get database size
+     */
+    private function get_database_size() {
+        global $wpdb;
+        
+        $result = $wpdb->get_var("
+            SELECT SUM(data_length + index_length) 
+            FROM information_schema.TABLES 
+            WHERE table_schema = DATABASE()
+        ");
+        
+        return $result ? (int)$result : 0;
+    }
+    
+    /**
+     * Estimate backup creation time based on size
+     */
+    private function estimate_backup_time($size_bytes) {
+        // Rough estimates based on typical server performance
+        $mb = $size_bytes / 1048576;
+        
+        if ($mb < 50) {
+            return 'Less than 1 minute';
+        } elseif ($mb < 200) {
+            return '1-3 minutes';
+        } elseif ($mb < 500) {
+            return '3-8 minutes';
+        } elseif ($mb < 1000) {
+            return '8-15 minutes';
+        } else {
+            return 'More than 15 minutes';
+        }
+    }
+
     // Plugin Analyzer Handler
     public function handle_plugin_analyzer() {
         if (!current_user_can('manage_options')) {
@@ -1938,9 +2391,12 @@ class REIA_Utilities_Bundle {
         $results['inactive_plugins'] = count($all_plugins) - $results['active_plugins'];
         $results['total_size'] = $this->format_bytes(array_sum(array_column($plugin_analysis, 'size_bytes')));
 
+        // Log to Simple History
+        $this->log_utility_action_to_history('plugin analyzer', 'scan', $results);
+
         wp_send_json_success($results);
     }
-    
+
     public function handle_file_cleaner() {
         if (!current_user_can('manage_options')) {
             wp_send_json_error('Insufficient permissions');
@@ -1992,6 +2448,9 @@ class REIA_Utilities_Bundle {
                     $this->format_bytes($cleaned['size'])
                 )
             );
+
+            // Log to Simple History (only for actual cleaning, not scanning)
+            $this->log_utility_action_to_history('file cleaner', 'clean', $results);
         }
 
         wp_send_json_success($results);
@@ -2030,6 +2489,9 @@ class REIA_Utilities_Bundle {
             'overall_score' => $this->calculate_security_score($core_checks, $permission_checks, $user_checks, $plugin_theme_checks, $config_checks)
         );
 
+        // Log to Simple History
+        $this->log_utility_action_to_history('security scanner', 'scan', $results);
+
         wp_send_json_success($results);
     }
 
@@ -2051,6 +2513,9 @@ class REIA_Utilities_Bundle {
             $results = $this->apply_performance_optimizations();
         }
 
+        // Log to Simple History
+        $this->log_utility_action_to_history('performance booster', $action, $results);
+
         wp_send_json_success($results);
     }
 
@@ -2070,13 +2535,14 @@ class REIA_Utilities_Bundle {
                 $results = $this->list_backups();
                 break;
             case 'create':
-                $backup_type = sanitize_text_field($_POST['backup_type'] ?? 'full');
-                $results = $this->create_backup($backup_type);
+                $backup_type = sanitize_text_field($_POST['backup_type'] ?? 'content');
+                $backup_options = isset($_POST['backup_options']) ? $_POST['backup_options'] : array();
+                $results = $this->create_backup($backup_type, $backup_options);
                 break;
-            case 'restore':
+            case 'download':
                 $backup_file = sanitize_text_field($_POST['backup_file'] ?? '');
-                $results = $this->restore_backup($backup_file);
-                break;
+                $this->download_backup($backup_file);
+                return; // Download handles its own response
             case 'delete':
                 $backup_file = sanitize_text_field($_POST['backup_file'] ?? '');
                 if ($dry_run) {
@@ -2092,8 +2558,17 @@ class REIA_Utilities_Bundle {
                     $results = $this->cleanup_old_backups();
                 }
                 break;
+            case 'get_size_estimate':
+                $backup_type = sanitize_text_field($_POST['backup_type'] ?? 'content');
+                $results = $this->get_backup_size_estimate($backup_type);
+                break;
             default:
                 wp_send_json_error('Invalid action');
+        }
+
+        // Log to Simple History (only for actual actions, not dry runs)
+        if (!$dry_run && in_array($action, array('create', 'delete', 'cleanup_old'))) {
+            $this->log_utility_action_to_history('backup manager', $action, $results);
         }
 
         wp_send_json_success($results);
